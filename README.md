@@ -165,7 +165,3 @@ Le projet suppose au minimum les tables suivantes (adaptez types/indices à votr
 - `sessions`: `id`, `user_id`, `expires_at`
 - `email_verification_tokens`: `user_id`, `token`, `expires_at`, `new_email` (nullable)
 - `password_reset_tokens`: `user_id`, `token`, `expires_at`
-
-## Licence
-
-Non définie (ajoutez un fichier `LICENSE` si vous souhaitez préciser l’usage).
