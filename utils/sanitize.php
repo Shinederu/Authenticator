@@ -43,4 +43,11 @@ function sanitizeArray(array $data): array
     return $clean;
 }
 
+function sanitizeEmailInput(array $data): array
+{
+    return [
+        'email' => trim(htmlspecialchars($data['email'] ?? '', ENT_QUOTES, 'UTF-8')),
+    ];
+}
+
 ?>

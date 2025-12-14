@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/DatabaseService.php';
 require_once __DIR__ . '/TokenService.php';
+require_once __DIR__ . '/../config/config.php';
 
 class SessionService
 {
@@ -14,7 +15,7 @@ class SessionService
     /**
      * Crée une nouvelle session en DB et retourne l'ID de session généré.
      */
-    public function createSession(int $userId, int $durationHours = 24): string
+    public function createSession(int $userId, int $durationHours = SESSION_DURATION_HOURS): string
     {
         $sessionId = TokenService::generateToken(64); // ID sécurisé
         $expiresAt = date('Y-m-d H:i:s', strtotime("+$durationHours hours"));
@@ -30,13 +31,21 @@ class SessionService
     /**
      * Vérifie la validité d'une session (true = OK, false = KO).
      */
-    public function isSessionValid(string $sessionId): bool
+    public function isSessionValid(string $sessionId, bool $refresh = true): bool
     {
         $session = $this->db->get('sessions', ['user_id', 'expires_at'], [
             'id' => $sessionId
         ]);
 
-        return ($session && strtotime($session['expires_at']) > time());
+        if (!$session || strtotime($session['expires_at']) <= time()) {
+            return false;
+        }
+
+        if ($refresh) {
+            $newExpires = date('Y-m-d H:i:s', strtotime("+" . SESSION_DURATION_HOURS . " hours"));
+            $this->db->update('sessions', ['expires_at' => $newExpires], ['id' => $sessionId]);
+        }
+        return true;
     }
 
     /**
@@ -47,8 +56,13 @@ class SessionService
         $session = $this->db->get('sessions', ['user_id', 'expires_at'], [
             'id' => $sessionId
         ]);
-        if (!$session || strtotime($session['expires_at']) < time())
+        if (!$session || strtotime($session['expires_at']) <= time()) {
             return false;
+        }
+
+        // Sliding expiration: refresh on access
+        $newExpires = date('Y-m-d H:i:s', strtotime("+" . SESSION_DURATION_HOURS . " hours"));
+        $this->db->update('sessions', ['expires_at' => $newExpires], ['id' => $sessionId]);
 
         return $session['user_id'];
     }

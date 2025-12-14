@@ -1,33 +1,28 @@
 <?php
 require_once __DIR__ . '/../services/SessionService.php';
+require_once __DIR__ . '/../utils/request.php';
+require_once __DIR__ . '/../utils/response.php';
 
 class AuthMiddleware
 {
     /**
      * Vérifie que l'utilisateur est connecté (session valide).
-     * Peut être appelé au début d'un endpoint "protégé".
+     * À appeler au début d'un endpoint protégé.
      */
     public static function check(): int
     {
         // Récupère le session_id (via cookie ou header)
-        $sessionId = $_COOKIE['sid'] ?? $_COOKIE['session_id'] // legacy
-            ?? $_SERVER['HTTP_X_SESSION_ID']                       // header: X-Session-Id
-            ?? $_SERVER['HTTP_SESSION_ID']                         // legacy header
-            ?? null;
+        $sessionId = getSessionId();
 
         if (!$sessionId) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Non authentifié']);
-            exit;
+            json_error('Non authentifié', 401);
         }
 
         $sessionService = new SessionService();
         $userId = $sessionService->getUserIdFromSession($sessionId);
 
         if (!$userId) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Session invalide ou expirée']);
-            exit;
+            json_error('Session invalide ou expirée', 401);
         }
 
         return $userId;

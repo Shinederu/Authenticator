@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/DatabaseService.php';
 require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../utils/response.php';
 
 
 class ProfileService
@@ -68,9 +69,7 @@ class ProfileService
         // 1) Crée une ressource GD
         $src = @imagecreatefromstring($bytes);
         if (!$src) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Fichier d\'image invalide ou corrompu']);
-            exit;
+            json_error('Fichier d\'image invalide ou corrompu', 400);
         }
 
         $w = imagesx($src);

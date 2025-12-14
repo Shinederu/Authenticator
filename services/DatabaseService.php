@@ -17,12 +17,14 @@ class DatabaseService
             'password' => DB_PASS,
         ]);
     }
+    /*
     private function __clone()
     {
     }
     private function __wakeup()
     {
     }
+    */
     public static function getInstance(): Medoo
     {
         if (self::$instance === null) {

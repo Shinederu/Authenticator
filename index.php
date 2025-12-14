@@ -1,17 +1,20 @@
 <?php
+
+
+
 // Load environment variables
 require_once __DIR__ . '/vendor/autoload.php';
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 $dotenv->load();
 
+require_once('utils/response.php');
 require_once('controllers/AuthController.php');
 require_once('controllers/UserController.php');
 require_once('middlewares/CorsMiddleware.php');
 require_once('middlewares/AuthMiddleware.php');
-CorsMiddleware::apply();
+//CorsMiddleware::apply(); Nginx gère les CORS
 
 
-header('Content-Type: application/json; charset=utf-8');
 
 // Récupération des données POST/PUT (body JSON ou formulaire)
 $body = [];
@@ -65,12 +68,12 @@ try {
                     (new AuthController())->login($body);
                     exit;
                 case 'logout':
-                    AuthMiddleware::check();
-                    (new AuthController())->logout($body);
+                    $userId = AuthMiddleware::check();
+                    (new AuthController())->logout($body, $userId);
                     exit;
                 case 'logoutAll':
-                    AuthMiddleware::check();
-                    (new AuthController())->logoutAll($body);
+                    $userId = AuthMiddleware::check();
+                    (new AuthController())->logoutAll($body, $userId);
                     exit;
                 case 'requestPasswordReset':
                     (new AuthController())->requestPasswordReset($body);
@@ -113,8 +116,8 @@ try {
             $action = $body['action'] ?? $_REQUEST['action'] ?? null;
             switch ($action) {
                 case 'deleteAccount':
-                    AuthMiddleware::check();
-                    (new UserController())->deleteAccount($body);
+                    $userId = AuthMiddleware::check();
+                    (new UserController())->deleteAccount($body, $userId);
                     exit;
                 default:
                     unknownAction('DELETE');
@@ -127,23 +130,11 @@ try {
     }
 
 } catch (PDOException $e) {
-    http_response_code(500);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Database Error: ' . $e->getMessage()
-    ]);
+    json_error('Database Error: ' . $e->getMessage(), 500);
 } catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Application Error: ' . $e->getMessage()
-    ]);
+    json_error('Application Error: ' . $e->getMessage(), 500);
 } catch (Throwable $e) {
-    http_response_code(500);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Unknown Error: ' . $e->getMessage()
-    ]);
+    json_error('Unknown Error: ' . $e->getMessage(), 500);
 } finally {
     exit;
 }
@@ -152,18 +143,10 @@ try {
 
 function unknownAction($method)
 {
-    http_response_code(404);
-    echo json_encode([
-        'status' => 'error',
-        'message' => "Unknown action for $method method"
-    ]);
+    json_error("Unknown action for $method method", 404);
 }
 
 function notAllowedMethod()
 {
-    http_response_code(405);
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'Method not allowed'
-    ]);
+    json_error('Method not allowed', 405);
 }

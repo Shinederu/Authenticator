@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../utils/sanitize.php';
+require_once __DIR__ . '/../utils/response.php';
 require_once __DIR__ . '/../services/SessionService.php';
 require_once __DIR__ . '/../services/AuthService.php';
 require_once __DIR__ . '/../services/ProfileService.php';
@@ -12,34 +13,16 @@ class UserController
      * Supprime le compte utilisateur et déconnecte.
      * Attend un tableau de données avec 'password' pour confirmation.
      */
-    public function deleteAccount(array $data = [])
+    public function deleteAccount(array $data = [], int $userId)
     {
-        $sessionId = $_COOKIE['sid'] ?? $_COOKIE['session_id'] // legacy
-            ?? $_SERVER['HTTP_X_SESSION_ID']                       // header: X-Session-Id
-            ?? $_SERVER['HTTP_SESSION_ID']                         // legacy header
-            ?? null;
-        if (!$sessionId) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Non authentifié']);
-            exit;
-        }
-
         $sessionService = new SessionService();
-        $userId = $sessionService->getUserIdFromSession($sessionId);
-        if (!$userId) {
-            http_response_code(401);
-            echo json_encode(['error' => 'Session invalide']);
-            exit;
-        }
 
         // Vérifie le mot de passe pour confirmer la suppression
         $password = $data['password'] ?? ($_REQUEST['password'] ?? '');
         $authService = new AuthService();
         $user = $authService->getUserById($userId);
         if (!$user || !password_verify($password, $user['password_hash'])) {
-            http_response_code(403);
-            echo json_encode(['error' => 'Mot de passe incorrect']);
-            exit;
+            json_error('Mot de passe incorrect', 403);
         }
 
         // Supprime l’utilisateur
@@ -49,38 +32,32 @@ class UserController
         // Supprime toutes ses sessions
         $sessionService->deleteAllSessionsForUser($userId);
 
-        // Efface le cookie côté client
+        // Efface les cookies de session (nouveau et legacy)
+        setcookie('sid', '', time() - 3600, '/', '.shinederu.lol', true, true);
         setcookie('session_id', '', time() - 3600, '/', '.shinederu.lol', true, true);
 
-        echo json_encode(['success' => true, 'message' => 'Compte supprimé et déconnecté']);
+        json_success('Compte supprimé et déconnecté');
     }
 
 
     public function updateProfile(array $data, int $userId)
     {
-
         $array = sanitizeArray($data);
         $username = $array['username'];
 
         if (strlen($username) < 4) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Nom d’utilisateur trop court (minimum 4 caractères)']);
-            exit;
+            json_error("Nom d’utilisateur trop court (minimum 4 caractères)", 400);
         }
 
         if (strlen($username) > 64) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Nom d’utilisateur trop long (maximum 64 caractères)']);
-            exit;
+            json_error("Nom d’utilisateur trop long (maximum 64 caractères)", 400);
         }
 
         $profileService = new ProfileService();
         if (!$profileService->updateProfile($userId, $username)) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Nom d’utilisateur déjà pris']);
-            exit;
+            json_error('Nom d’utilisateur déjà pris', 400);
         }
-        echo json_encode(['success' => true, 'message' => 'Profil mis à jour']);
+        json_success('Profil mis à jour');
     }
 
 
@@ -91,16 +68,25 @@ class UserController
         $profileService = new ProfileService();
         $avatar = $profileService->getAvatar($userId);
         if (!$avatar) {
-            http_response_code(404);
-            echo json_encode(['error' => 'Avatar non trouvé']);
-            exit;
+            json_error('Avatar non trouvé', 404);
         }
 
+        // Purge tout buffer de sortie éventuel pour éviter de corrompre l'image
+        if (function_exists('ob_get_level')) {
+            while (ob_get_level() > 0) {
+                @ob_end_clean();
+            }
+        }
+
+        // En-têtes explicites pour un rendu fiable cross-origin
         header('Content-Type: image/png');
+        header('X-Content-Type-Options: nosniff');
+        header('Cross-Origin-Resource-Policy: cross-origin');
         header('Cache-Control: public, max-age=31536000, immutable');
+        header('Content-Length: ' . strlen($avatar));
+
         echo $avatar;
         exit;
-
     }
 
     public function updateAvatar(array $data, int $userId)
@@ -120,25 +106,19 @@ class UserController
         }
 
         if (!$avatarBytes) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Aucune image PNG reçue']);
-            exit;
+            json_error('Aucune image reçue', 400);
         }
 
         // limite de taille
         if (strlen($avatarBytes) > 5 * 1024 * 1024) { // 5 MB
-            http_response_code(400);
-            echo json_encode(['error' => 'Image trop lourde (max 5 Mo).']);
-            exit;
+            json_error('Image trop lourde (max 5 Mo).', 400);
         }
         // Vérif MIME (depuis les octets, pas le nom de fichier)
         $finfo = new finfo(FILEINFO_MIME_TYPE);
         $mime = $finfo ? $finfo->buffer($avatarBytes) : null;
-        $allowed = ['image/png', 'image/jpeg', 'image/webp']; // <-- inline (simple)
+        $allowed = ALLOWED_MIME; // configurable via config.php / .env
         if (!$mime || !in_array($mime, $allowed, true)) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Type non autorisé (PNG, JPEG ou WebP).']);
-            return;
+            json_error('Type non autorisé (PNG, JPEG ou WebP).', 400);
         }
 
         $profile = new ProfileService();
@@ -146,14 +126,10 @@ class UserController
         $result = $profile->saveUploadedPng($userId, $png);
 
         if (!$result) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Échec de la mise à jour de l’image de profil dans la base de données']);
-            exit;
+            json_error("Échec de la mise à jour de l’image de profil dans la base de données", 500);
         }
-        echo json_encode(['success' => true, 'message' => 'Image de profil mise à jour']);
+        json_success('Image de profil mise à jour');
     }
-
 }
-
 
 ?>

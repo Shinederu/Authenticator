@@ -4,6 +4,8 @@ class CorsMiddleware
 {
     public static function apply()
     {
+     
+       
         // Récupère l'origine de la requête
         $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
@@ -14,8 +16,9 @@ class CorsMiddleware
         }
 
         header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Session-Id');
+        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Session-Id, X-Session-Id');
         header('Access-Control-Allow-Credentials: true');
+        
 
         if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
             http_response_code(204);
